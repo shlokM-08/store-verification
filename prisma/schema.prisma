@@ -1,0 +1,62 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Postgres database for production (Vercel-compatible)
+// For local dev, use DATABASE_URL in .env pointing to your Postgres instance
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Shopify session storage (used by @shopify/shopify-app-session-storage-prisma)
+model Session {
+  id            String    @id
+  shop          String
+  state         String
+  isOnline      Boolean   @default(false)
+  scope         String?
+  expires       DateTime?
+  accessToken   String
+  userId        BigInt?
+  firstName     String?
+  lastName      String?
+  email         String?
+  accountOwner  Boolean   @default(false)
+  locale        String?
+  collaborator  Boolean?  @default(false)
+  emailVerified Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+}
+
+// Shop model for multi-tenant SaaS architecture
+// Stores installation state and shop-specific data
+model Shop {
+  id            String    @id @default(cuid())
+  shopDomain    String    @unique
+  accessToken   String
+  installedAt   DateTime  @default(now())
+  uninstalledAt DateTime?
+  settings      Setting[]
+
+  @@index([shopDomain])
+  @@map("shops")
+}
+
+// Settings model for per-shop key/value configuration
+// Supports flexible settings storage without schema changes
+model Setting {
+  id     String @id @default(cuid())
+  shopId String
+  key    String
+  value  String
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, key])
+  @@index([shopId])
+  @@map("settings")
+}
