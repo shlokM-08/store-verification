@@ -33,8 +33,6 @@ model Session {
   refreshTokenExpires DateTime?
 }
 
-// Shop model for multi-tenant SaaS architecture
-// Stores installation state and shop-specific data
 model Shop {
   id            String    @id @default(cuid())
   shopDomain    String    @unique
@@ -42,6 +40,9 @@ model Shop {
   installedAt   DateTime  @default(now())
   uninstalledAt DateTime?
   settings      Setting[]
+
+  // Product rules for auto-tagger feature
+  productRules  ProductRule[]
 
   @@index([shopDomain])
   @@map("shops")
@@ -59,4 +60,22 @@ model Setting {
   @@unique([shopId, key])
   @@index([shopId])
   @@map("settings")
+}
+
+// Product rules for Auto Product Tagger v1
+// All rules are strictly scoped to a shop via shopId (multi-tenant safety)
+model ProductRule {
+  id        String   @id @default(cuid())
+  shopId    String
+  field     String   // "price" | "inventory" | "vendor"
+  operator  String   // "gt" | "lt" | "eq"
+  value     String
+  tag       String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId])
+  @@map("product_rules")
 }
