@@ -20,7 +20,9 @@ type AdminContext = {
  */
 export interface ProductWebhookPayload {
   id: number;
+  title?: string | null;
   vendor?: string | null;
+  status?: string | null; // "active" | "draft" | "archived"
   variants?: Array<{
     price?: string | null;
     inventory_quantity?: number | null;
@@ -72,6 +74,53 @@ export function mapWebhookPayloadToProduct(
 }
 
 /**
+ * Save or update a product in the database from webhook payload.
+ * This ensures all products are stored in Postgres for viewing in Prisma Studio.
+ */
+export async function saveProductToDatabase(options: {
+  shopId: string;
+  payload: ProductWebhookPayload;
+}): Promise<void> {
+  const { shopId, payload } = options;
+
+  const firstVariant = payload.variants?.[0];
+  const price = firstVariant?.price ?? null;
+
+  const totalInventory =
+    payload.variants?.reduce<number>((sum, variant) => {
+      const qty = variant.inventory_quantity ?? 0;
+      return sum + qty;
+    }, 0) ?? null;
+
+  await prisma.product.upsert({
+    where: {
+      shopId_shopifyProductId: {
+        shopId,
+        shopifyProductId: BigInt(payload.id),
+      },
+    },
+    create: {
+      shopId,
+      shopifyProductId: BigInt(payload.id),
+      title: payload.title ?? null,
+      vendor: payload.vendor ?? null,
+      tags: payload.tags ?? null,
+      status: payload.status ?? null,
+      price: price ?? null,
+      totalInventory: totalInventory ?? null,
+    },
+    update: {
+      title: payload.title ?? null,
+      vendor: payload.vendor ?? null,
+      tags: payload.tags ?? null,
+      status: payload.status ?? null,
+      price: price ?? null,
+      totalInventory: totalInventory ?? null,
+    },
+  });
+}
+
+/**
  * Apply product rules for a given shop + product payload.
  *
  * Idempotency:
@@ -94,6 +143,12 @@ export async function applyProductRulesForShop(options: {
     console.warn(`No Shop record found for domain ${shopDomain}`);
     return;
   }
+
+  // Save product to database first (always, regardless of rules)
+  await saveProductToDatabase({
+    shopId: shopRecord.id,
+    payload,
+  });
 
   const rules = await getRulesForShop(shopRecord.id);
   if (rules.length === 0) {

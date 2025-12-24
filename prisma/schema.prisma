@@ -43,6 +43,9 @@ model Shop {
 
   // Product rules for auto-tagger feature
   productRules  ProductRule[]
+  
+  // Products stored from webhooks
+  products      Product[]
 
   @@index([shopDomain])
   @@map("shops")
@@ -78,4 +81,27 @@ model ProductRule {
 
   @@index([shopId])
   @@map("product_rules")
+}
+
+// Products synced from Shopify webhooks
+// Stores product data for easy querying and viewing in Prisma Studio
+model Product {
+  id              String   @id @default(cuid())
+  shopId          String
+  shopifyProductId BigInt   // Shopify's numeric product ID
+  title           String?
+  vendor          String?
+  tags            String?  // Comma-separated tags
+  status          String?  // "active" | "draft" | "archived"
+  price           String?  // Price from first variant (as string to preserve precision)
+  totalInventory  Int?     // Sum of inventory across all variants
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, shopifyProductId])
+  @@index([shopId])
+  @@index([shopifyProductId])
+  @@map("products")
 }
